@@ -1,0 +1,211 @@
+﻿@using CTO.Price.Shared.Extensions
+@using Microsoft.Extensions.Options
+@using CTO.Price.Shared.Domain
+
+@inject IOptions<PaginationSetting> paginationSetting;
+
+@if (PagedResult != null)
+{
+    <div class="row">
+        <div class="col-6">
+            @if (PagedResult.PageCount > 0)
+            {
+                <ul class="pagination">
+                    <li class="page-item @(PagedResult.CurrentPage == 1 ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" disabled @onclick=@(_ => NavigateToPreviousPage())>Prev</a>
+                    </li>
+
+                    @if (PagedResult.PageCount <= minRequisiteToLimitPagination)
+                    {
+                        for (int i = 1; i <= PagedResult.PageCount; i++)
+                        {
+                            var currentPage = i;
+                            <li class="page-item current-page @(currentPage == PagedResult.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(currentPage))>
+                                    @currentPage
+                                </a>
+                            </li>
+                        }
+                    }
+                    else if (PagedResult.CurrentPage < limitPaginationStep)
+                    {
+                        for (int i = 1; i < limitPaginationStep + 1; i++)
+                        {
+                            var currentPage = i;
+                            <li class="page-item current-page @(currentPage == PagedResult.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(currentPage))>
+                                    @currentPage
+                                </a>
+                            </li>
+                        }
+                        <li class="page-item disabled">
+                            <a class="page-link" href="javascript:void(0)">...</a>
+                        </li>
+                        <li class="page-item current-page @(PagedResult.CurrentPage == PagedResult.PageCount ? "active" : "")">
+                            <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(PagedResult.PageCount))>@PagedResult.PageCount</a>
+                        </li>
+                    }
+                    else if (PagedResult.CurrentPage > PagedResult.PageCount - limitPaginationStep + 1)
+                    {
+                        <li class="page-item current-page @(PagedResult.CurrentPage == 1 ? "active" : "")">
+                            <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(1))>1</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="javascript:void(0)">...</a>
+                        </li>
+                        for (int i = PagedResult.PageCount - limitPaginationStep + 1; i < PagedResult.PageCount + 1; i++)
+                        {
+                            var currentPage = i;
+                            <li class="page-item current-page @(currentPage == PagedResult.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(currentPage))>
+                                    @currentPage
+                                </a>
+                            </li>
+                        }
+                    }
+                    else
+                    {
+                        <li class="page-item current-page @(PagedResult.CurrentPage == 1 ? "active" : "")">
+                            <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(1))>1</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="javascript:void(0)">...</a>
+                        </li>
+                        for (int i = PagedResult.CurrentPage - 1; i < PagedResult.CurrentPage + limitPaginationStep - 1; i++)
+                        {
+                            var currentPage = i;
+                            <li class="page-item current-page @(currentPage == PagedResult.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(currentPage))>
+                                    @currentPage
+                                </a>
+                            </li>
+                        }
+                        <li class="page-item disabled">
+                            <a class="page-link" href="javascript:void(0)">...</a>
+                        </li>
+                        <li class="page-item current-page @(PagedResult.CurrentPage == PagedResult.PageCount ? "active" : "")">
+                            <a class="page-link" href="javascript:void(0)" @onclick=@(async () => await RefreshRecords(PagedResult.PageCount))>@PagedResult.PageCount</a>
+                        </li>
+                    }
+
+                    <li class="page-item @(PagedResult.CurrentPage == PagedResult.PageCount ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" disabled @onclick=@(async () => await NavigateToNextPage())>Next</a>
+                    </li>
+                </ul>
+            }
+        </div>
+
+        <div class="col-5 d-flex flex-row-reverse">
+            <span>Items per page</span>
+        </div>
+        <div class="col-1">
+            <select class="form-control" @onchange=@ChangePageSize>
+                @foreach (var pSize in _pageSizeOption)
+                {
+                    <option value="@pSize">@pSize</option>
+                }
+            </select>
+        </div>
+    </div>
+}
+
+@code
+{
+    int limitPaginationStep, minRequisiteToLimitPagination = 0;
+    static List<string> _pageSizeOption = new List<string>();
+
+    int startPage;
+    int endPage;
+
+    [Parameter]
+    public PagedResultBase PagedResult { get; set; } = null!;    
+
+    [Parameter]
+    public EventCallback<PagedResultBase> OnSelected { get; set; }
+
+    [Parameter]
+    public List<string> PageSizeOption { get; set; } = null!;
+
+    public async Task RefreshRecords(int currentPage)
+    {
+        PagedResult.CurrentPage = currentPage;
+        await OnSelected.InvokeAsync(PagedResult);
+    }
+
+    protected override void OnInitialized()
+    {
+        _pageSizeOption = PageSizeOption ?? PagingExtension.GetPaginationSettingBySemiColon(paginationSetting?.Value?.PageSize ?? string.Empty);
+        limitPaginationStep = paginationSetting?.Value?.LimitPaginationStep ?? limitPaginationStep;
+        minRequisiteToLimitPagination = paginationSetting?.Value?.MinRequisiteToLimitPagination ?? minRequisiteToLimitPagination;
+        var isConvert = int.TryParse(_pageSizeOption.First(), out var pageSizeConvert);
+        var pageSize = isConvert ? pageSizeConvert : 0;
+        PagedResult.PageSize = PagedResult.PageSize == 0 ? pageSize : PagedResult.PageSize;        
+    }
+    
+    async Task ChangePageSize(ChangeEventArgs e)
+    {
+        PagedResult.PageSize = Convert.ToInt32(e.Value);
+
+        PagedResult.CurrentPage = 1;
+        PagedResult.PageCount = (int) Math.Ceiling(PagedResult.RowCount / (decimal) PagedResult.PageSize);
+        SetForwardPagerSize();
+
+        await RefreshRecords(PagedResult.CurrentPage);
+    }
+
+
+    public void SetForwardPagerSize()
+    {
+        if (endPage < PagedResult.PageCount)
+        {
+            startPage = endPage + 1;
+            if (endPage + PagedResult.PageSize < PagedResult.PageCount)
+            {
+                endPage = startPage + PagedResult.PageSize - 1;
+            }
+            else
+            {
+                endPage = PagedResult.PageCount;
+            }
+        }
+    }
+
+    public void SetBackPagerSize()
+    {
+        if (startPage > 1)
+        {
+            endPage = startPage - 1;
+            startPage = startPage - PagedResult.PageSize;
+        }
+    }
+
+    public async Task NavigateToNextPage()
+    {
+        if (PagedResult.CurrentPage < PagedResult.PageCount)
+        {
+            if (PagedResult.CurrentPage == endPage)
+            {
+                SetForwardPagerSize();
+            }
+
+            PagedResult.CurrentPage += 1;
+        }
+
+        await RefreshRecords(PagedResult.CurrentPage);
+    }
+
+    public async Task NavigateToPreviousPage()
+    {
+        if (PagedResult.CurrentPage > 1)
+        {
+            if (PagedResult.CurrentPage == startPage)
+            {
+                SetBackPagerSize();
+            }
+
+            PagedResult.CurrentPage -= 1;
+        }
+
+        await RefreshRecords(PagedResult.CurrentPage);
+    }
+}

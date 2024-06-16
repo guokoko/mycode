@@ -1,0 +1,46 @@
+@page "/version"
+
+@using CTO.Price.Admin.Services
+
+@inject IPriceApi PriceApi
+@inject IPriceScheduler PriceScheduler
+@inject SpinnerService spinnerService
+@using static RZ.Foundation.Prelude
+@using CTO.Price.Admin.Data
+
+<AuthorizeView Policy="@RolePolicy.Version.ToString()">
+    <Authorized>
+        <table class="table table-bordered">
+            <colgroup>
+                <col style="width: 1in;">
+                <col>
+            </colgroup>
+            <tbody>
+            <tr>
+                <td>Version</td><td>@Program.Version</td>
+            </tr>
+            <tr>
+                <td>API</td><td>@apiVersion</td>
+            </tr>
+            <tr>
+                <td>Scheduler</td><td>@schedulerVersion</td>
+            </tr>
+            </tbody>
+        </table>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+
+    string apiVersion = string.Empty;
+    string schedulerVersion = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        spinnerService.Show();
+        apiVersion = (await TryAsync(PriceApi.GetVersion).Try()).GetOrElse("ERROR!");
+        schedulerVersion = (await TryAsync(PriceScheduler.GetVersion).Try()).GetOrElse("ERROR!");
+        spinnerService.Hide();
+    }
+
+}

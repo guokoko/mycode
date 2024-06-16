@@ -1,0 +1,292 @@
+﻿@page "/upload"
+
+@using CTO.Price.Admin.Services
+@using CTO.Price.Admin.Data
+@using CTO.Price.Shared.Domain
+@using CTO.Price.Shared.Extensions
+@using CTO.Price.Shared.Services
+@using Grpc.Core
+@using System.Security.Claims
+
+@inject IPriceApi priceApi
+@inject IAuditService auditService;
+@inject IUploadLogService uploadLogService;
+@inject IFileStorageService fileStorageService;
+@inject TimeZoneService timeZoneService
+@inject SpinnerService spinnerService
+@inject IUserService userService
+
+<AuthorizeView Policy="@RolePolicy.Upload.ToString()">
+    <Authorized>
+        <h1>Upload file</h1>
+        
+        <div class="container-fluid">
+            <div class="row">
+                <ul class="list-group container-fluid">
+                    <li class="list-group-item col-xs-12 text-center active">Description</li>
+                    <li class="list-group-item justify-content-between text-center">
+                        *** You can download example file, Click here @arrowLeft
+                        <a href="Documents/example_online_price.csv" download="example_online_price.csv" target="_top">
+                            download template file</a> 
+                        @arrowRight ***
+                    </li>
+                    <li class="list-group-item font-weight-bold">File upload validations</li>
+                    <li class="list-group-item">1. Upload file must CSV and MUST contain data</li>
+                    <li class="list-group-item">2. The data for every field of MUST be populated. No null or empty allowed.</li>
+                    <li class="list-group-item">3. The online_prices field MUST not contain comma, (good example "1000" or "1000.5") , (bad example "1,000")</li>
+                    <li class="list-group-item">4. Date fields (online_from_date and online_to_date) have to be in "mm/DD/YYYY HH:MM" format</li>
+                    <li class="list-group-item">5. online_from_date date MUST be before online_to_date date</li>
+                </ul>
+            </div>
+        </div>
+        <br/>
+        <div class="container-fluid">
+            <div class="row">
+                <ul class="list-group container-fluid">
+                    <li class="list-group-item col-xs-12 text-center active">Upload</li>
+                    <li class="list-group-item justify-content-center text-center">
+                        <InputFile OnChange="HandleSelection"/>
+                        <br>
+                        <p class="text-success">@successStatus</p>
+                        <p class="text-danger">@failureStatus</p>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <br/>
+        <div class="container-fluid">
+            <div class="row">
+                <ul class="list-group container-fluid">
+                    <li class="list-group-item col-xs-12 text-center active">Upload History</li>
+                    <li class="list-group-item align-content-center text-center">
+                        <div class="container-fluid">
+                            <div class="row">
+                                <div class="col-2">
+                                    <input id="email" type="text" class="form-control" placeholder="Email" @bind="@emailFilter">
+                                </div>
+                                <div class="col-2">
+                                    <input id="fromDate" type="date" class="form-control" @bind="@fromDateLocal">
+                                </div>
+                                <div class="col-2">
+                                    <input id="endDate" type="date" class="form-control" @bind="@endDateLocal">
+                                </div>
+                                <div class="col-2">
+                                    <select class="form-control" @onchange="@ConvertUploadResultToEnum">
+                                        @foreach (var option in uploadResultOption)
+                                        {
+                                            <option value="@option">
+                                                @(option is null ? "All" : option.ToString())
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-2">
+                                    <input id="fileName" type="text" class="form-control" placeholder="File Name" @bind="@fileNameFilter">
+                                </div>
+                                <div class="col">
+                                    <button type="submit" class="btn btn-primary mb-2" @onclick="FilterLog">Search</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <table class="table">
+                                <thead class="thead-dark">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Email</th>
+                                    <th>FileName</th>
+                                    <th>Result</th>
+                                    <th>Detail</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var log in logDisplay)
+                                {
+                                    <tr>
+                                        <td>@log.LogTime</td>
+                                        <td>@log.Email</td>
+                                        <td>
+                                            @if (log.Result != UploadResult.S3Failure && downloadS3Files.Count > 0 &&
+                                                 log.FileName.IsIn(downloadS3Files.Keys))
+                                            {
+                                                <a href="@downloadS3Files[log.FileName]" target = "_blank">
+                                                    @log.FileName
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                @log.FileName
+                                            }
+                                        </td>
+                                        <td>@log.Result</td>
+                                        <td>@log.Detail</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <Pager
+                            PagedResult=@pagedResult
+                            PageSizeOption=@pageSizeOption
+                            OnSelected="@(_ => HandlePageIndexSelected(pagedResult))">
+                        </Pager>
+
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+    private ClaimsIdentity? identity;
+
+    readonly string arrowLeft = ">>>";
+    readonly string arrowRight = "<<<";
+    readonly List<string> pageSizeOption = new List<string>() {"5"};
+    
+    List<UploadLog> logDisplay = new List<UploadLog>();
+    Dictionary<string, string> downloadS3Files = new Dictionary<string, string>();
+    string status = string.Empty;
+    MarkupString successStatus = (MarkupString)string.Empty;
+    MarkupString failureStatus = (MarkupString)string.Empty;
+    
+    List<UploadResult?> uploadResultOption = Enum.GetValues(typeof(UploadResult)).Cast<UploadResult?>().ToList();
+    string emailFilter = string.Empty;
+    string fileNameFilter = string.Empty;
+    UploadResult? resultType;
+    DateTime fromDateLocal = DateTime.Now;
+    DateTime endDateLocal = DateTime.Now.AddDays(1);
+
+    PagedResult<UploadLog> pagedResult = new PagedResult<UploadLog>();
+    int maxLogHistoryRow = 5;
+
+    async Task HandleSelection(IFileListEntry[] files)
+    {
+        spinnerService.Show();
+
+        var userName = identity!.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value ?? string.Empty;
+        var user = await userService.GetUserByName(userName);
+        var email = user.IsSome ? user.Get()?.Email : string.Empty;
+            
+        successStatus = failureStatus = (MarkupString)string.Empty; //Clear message.
+        var file = files.FirstOrDefault();
+        if (file != null)
+        {
+            UploadResult result;
+            var fileName = $"{DateTime.UtcNow.ToIsoFormat()}-{file.Name}";
+            if (!file.Name.Contains(".csv"))
+            {
+                status = "Invalid file! File type must be csv";
+                result = UploadResult.Failure;
+            }
+            else
+            {
+                try
+                {
+                    status = await priceApi.UpdatePrices(fileName, file);
+                    result = UploadResult.Success;
+                }
+                catch (RpcException ex)
+                {
+                    status = $"Upload Failure! - {ex.Status.Detail}".Replace("|","<br/>");
+                    result = ex.Status.StatusCode == StatusCode.Unavailable ? UploadResult.S3Failure : UploadResult.Failure;
+                }
+            }
+
+            successStatus = (MarkupString)(result == UploadResult.Success ? status : string.Empty);
+            failureStatus = (MarkupString)(result == UploadResult.Failure ? status : string.Empty);
+
+            var logsDetail = status.Replace("<br/>", ","); 
+            var auditLogs = auditService.CreateLogMessage(email!, AuditLogActionType.UploadPrice, $"result={result},status={logsDetail}", DateTime.UtcNow);
+            var uploadLogs = uploadLogService.CreateLogMessage(email!, fileName, result, logsDetail);
+            await Task.WhenAll(auditLogs, uploadLogs);
+            await FilterLog();
+        }
+        spinnerService.Hide();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        identity = (await AuthenticationStateTask).User.Identity as ClaimsIdentity;
+        uploadResultOption.Insert(0, null);
+    }
+
+    void ConvertUploadResultToEnum(ChangeEventArgs e)
+    {
+        var isUploadResultEnum = Enum.TryParse(e.Value.ToString(), true, out UploadResult uploadResultEnumConvert);
+        resultType = isUploadResultEnum ? uploadResultEnumConvert : (UploadResult?) null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            spinnerService.Show();
+            
+            fromDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow)).DateTime;
+            endDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow.AddDays(1))).DateTime;
+            var (from, end) = await GetDateRange(fromDateLocal, endDateLocal);
+            
+            pagedResult.PageSize = maxLogHistoryRow;
+            pagedResult.CurrentPage = 1;
+            
+            await RetrieveLogData(from, end, pagedResult.CurrentPage, pagedResult.PageSize);
+            
+            spinnerService.Hide();
+        }
+        StateHasChanged();
+    }
+
+    async Task FilterLog()
+    {
+        spinnerService.Show();
+
+        var (from, end) = await GetDateRange(fromDateLocal, endDateLocal);
+        await RetrieveLogData(from, end, pagedResult.CurrentPage, pagedResult.PageSize);
+        
+        spinnerService.Hide();
+    }
+
+    async Task HandlePageIndexSelected(PagedResultBase pagedResultBase)
+    {
+        spinnerService.Show();
+        
+        pagedResult = (PagedResult<UploadLog>) pagedResultBase;
+        var (from, end) = await GetDateRange(fromDateLocal, endDateLocal);
+        await RetrieveLogData(from, end, pagedResult.CurrentPage, pagedResult.PageSize);
+        
+        spinnerService.Hide();
+    }
+    
+    #region Private Method
+    async Task<(DateTime, DateTime)> GetDateRange(DateTime fromLocalInput, DateTime endLocalInput)
+    {
+        var offset = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow)).Offset;
+        var from = fromLocalInput.Add(-offset);
+        var end = endLocalInput.Add(offset);
+        return (from, end);
+    }
+
+    async Task RetrieveLogData(DateTime fromDate, DateTime endDate, int pageIndex, int pageSize)
+    {
+        logDisplay = await uploadLogService.GetUploadLogWithFilter(fromDate, endDate, fileNameFilter, resultType, emailFilter, pageIndex, pageSize);
+        
+        pagedResult.RowCount = Convert.ToInt32(await uploadLogService.GetTotalRecordWithFilter(fromDate, endDate, fileNameFilter, resultType, emailFilter));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pageSize);
+        pagedResult.CurrentPage = pageIndex;
+        
+        downloadS3Files = new Dictionary<string, string>();
+        foreach (var log in logDisplay)
+        {
+            log.LogTime = (await timeZoneService.GetLocalDateTime(log.LogTime)).DateTime;
+            var downloadLink = fileStorageService.GeneratePreSignedUrl(log.FileName);
+            if (!downloadS3Files.Keys.Contains(log.FileName)) 
+                downloadS3Files.Add(log.FileName, downloadLink);
+        }
+    }
+    #endregion Private Method
+}

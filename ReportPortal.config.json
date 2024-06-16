@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/reportportal/agent-net-xunit/master/src/ReportPortal.XUnitReporter/ReportPortal.config.schema",
+  "enabled": true,
+  "server": {
+    "url": "https://report-portal.central.tech/",
+    "project": "price-service"
+  }
+}

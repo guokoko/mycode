@@ -1,0 +1,18 @@
+@using Microsoft.AspNetCore.Authentication.AzureAD.UI
+
+@{
+    <div>
+        <form asp-action="AzureLogin" asp-route-returnurl="@ViewData["ReturnUrl"]" method="post" class="form-horizontal mt-3" id="external-login-form">
+            <div>
+                <p>
+                    <button type="submit" class="btn btn-info btn-login-with bg-azure-login" value="@AzureADDefaults.AuthenticationScheme" name="provider">
+                        <em class="fa fa-cloud"></em>Login with CG Passport
+                    </button>
+                </p>
+            </div>
+        </form>
+    </div>
+    <div class="col-sm-12 align-self-center">
+        <p class="text-center text-secondary">Or</p>
+    </div>
+}

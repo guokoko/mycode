@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+
+        <IsPackable>false</IsPackable>
+
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Akka.TestKit.Xunit2" Version="1.4.9" />
+        <PackageReference Include="coverlet.collector" Version="1.3.0" />
+        <PackageReference Include="coverlet.msbuild" Version="2.9.0" />
+        <PackageReference Include="FluentAssertions" Version="5.10.3" />
+        <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" Version="3.1.7" />
+        <PackageReference Include="Moq" Version="4.14.1" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.7.1" />
+        <PackageReference Include="RZ.Foundation" Version="2.0.4" />
+        <PackageReference Include="System.Linq.Async" Version="4.1.1" />
+        <PackageReference Include="xunit" Version="2.4.1" />
+        <PackageReference Include="xunit.abstractions" Version="2.0.3" />
+        <PackageReference Include="xunit.extensibility.core" Version="2.4.1" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3" />
+        <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+      <ProjectReference Include="..\TestUtility\TestUtility.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="ActorEngineTest\actor.conf">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,28 @@
+﻿@using CTO.Price.Admin.Services
+@model CTO.Price.Admin.Data.ExternalLoginModel
+@inject IUserService userService
+
+<div id="signup-admin">
+    @if (userService.GetAllUser().Result.Count == 0)
+    {
+        ViewData["Title"] = "Register CG employee admin account";
+        <form asp-action="Register" method="post">
+            <div class="col-sm-12 align-self-center">
+                <p class="text-center text-secondary">@ViewData["Title"]</p>
+            </div>
+            <div asp-validation-summary="All" class="text-danger"></div>
+            <div class="field-wrap mt-2">
+                <input placeholder="Email" asp-for="Email" class="form-control"/>
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-lg col-md-12 mt-3">Register</button>
+        </form>
+    }
+    else
+    {
+        ViewData["Title"] = "Only register when does not exist any admin account";
+        <div class="col-sm-12 align-self-center">
+            <p class="text-center text-secondary">@ViewData["Title"]</p>
+        </div>
+    }
+</div>

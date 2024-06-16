@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <RootNamespace>WebApplication</RootNamespace>
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(RunConfiguration)' == 'MongoMigrations' " />
+    <ItemGroup>
+      <PackageReference Include="Mongo.Migration" Version="3.0.123" />
+      <PackageReference Include="MongoDB.Bson" Version="2.21.0" />
+      <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\PriceAdmin\PriceAdmin.csproj" />
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

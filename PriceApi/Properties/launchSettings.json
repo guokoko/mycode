@@ -1,0 +1,21 @@
+﻿{
+  "profiles": {
+    "PriceApi": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5002;http://localhost:5003",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "BindingPort": "4772",
+        "ASPNETCORE_URLS": "http://*:4772",
+        "AWS_ACCESS_KEY_ID": "ACCESS TOKEN",
+        "AWS_SECRET_ACCESS_KEY": "SECRET TOKEN",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "api",
+        "ActorSystem__InternalBinding": "localhost:5006",
+        "ActorSystem__ExternalBinding": "localhost:5006",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005"
+      }
+    }
+  }
+}

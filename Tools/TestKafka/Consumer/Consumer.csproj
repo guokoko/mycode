@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Confluent.Kafka" Version="1.5.1" />
+      <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

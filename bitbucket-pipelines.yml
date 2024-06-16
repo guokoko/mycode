@@ -1,0 +1,33 @@
+# This is a sample build configuration for Other.
+# Check our guides at https://confluence.atlassian.com/x/5Q4SMw for more examples.
+# Only use spaces to indent your .yml configuration.
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+image: atlassian/default-image:2
+
+options:
+  max-time: 1
+pipelines:
+  branches:
+      master:
+      - step:
+          name: Increment Version Number & Add tag version
+          script:
+          - MSG_VERSION_UPDATE="[skip ci] Version Update By Pipeline"
+          - declare -x LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          - echo $LAST_COMMIT_MESSAGE
+          - if [[ $LAST_COMMIT_MESSAGE == "$MSG_VERSION_UPDATE "* ]]; then exit; fi
+          - declare -x VERSION=$(perl -lne '/<Version>(.*[.])([0-9]+)/ and print $1.($2+1)' PriceAdmin/PriceAdmin.csproj)
+          - echo update version to $VERSION
+          - perl -pi -lne 'BEGIN {$ver=shift} s/(<Version>).*[.][0-9]+/$1$ver/' $VERSION PriceAdmin/PriceAdmin.csproj
+          - perl -pi -lne 'BEGIN {$ver=shift} s/(<Version>).*[.][0-9]+/$1$ver/' $VERSION PriceApi/PriceApi.csproj
+          - perl -pi -lne 'BEGIN {$ver=shift} s/(<Version>).*[.][0-9]+/$1$ver/' $VERSION PriceScheduler/PriceScheduler.csproj
+          - echo create tag version/$VERSION
+          - git remote set-url origin ${BITBUCKET_GIT_SSH_ORIGIN}
+          - git config user.email 'price-service@central.tech'
+          - git config user.name 'Price-Service'
+          - git add .
+          - git commit -m "$MSG_VERSION_UPDATE to $VERSION"
+          - git push origin HEAD:master
+          - git tag version/$VERSION
+          - git push origin  --tags

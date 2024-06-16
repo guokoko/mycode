@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Confluent.Kafka" Version="1.5.1" />
+      <PackageReference Include="Grpc.Core.Api" Version="2.27.0" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.7" />
+      <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="3.1.7" />
+      <PackageReference Include="Microsoft.Extensions.Localization" Version="3.1.7" />
+      <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" Version="3.1.7" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="3.1.7" />
+      <PackageReference Include="Moq" Version="4.14.1" />
+      <PackageReference Include="RZ.Foundation" Version="2.0.4" />
+      <PackageReference Include="xunit.abstractions" Version="2.0.3" />
+      <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\PriceAdmin\PriceAdmin.csproj" />
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

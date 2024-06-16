@@ -1,0 +1,165 @@
+@page "/auditlog"
+
+@using CTO.Price.Admin.Services
+@using CTO.Price.Admin.Data
+@using CTO.Price.Shared.Extensions
+@using CTO.Price.Shared.Domain
+@using CTO.Price.Shared.Services
+@using Microsoft.Extensions.Options
+
+@inject IAuditService auditService
+@inject IOptions<PaginationSetting> paginationSetting;
+@inject TimeZoneService timeZoneService
+@inject SpinnerService spinnerService
+
+<AuthorizeView Policy="@RolePolicy.AuditLog.ToString()">
+    <Authorized>
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-3">
+                    <input id="email" type="text" class="form-control" placeholder="Email" @bind="@emailFilter">
+                </div>
+                <div class="col-2">
+                    <input id="fromDate" type="date" class="form-control" @bind="@fromDateLocal">
+                </div>
+                <div class="col-2">
+                    <input id="endDate" type="date" class="form-control" @bind="@endDateLocal">
+                </div>
+                <div class="col-2">
+                    <select class="form-control" @bind="actionType">
+                        @foreach (var option in actionOptions) {
+                            <option value="@option">
+                                @option.ToString()
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col">
+                    <button type="submit" class="btn btn-primary mb-2" @onclick="FilterLog">Search</button>
+                </div>
+            </div>
+        </div>
+        <div>
+            <table class="table">
+                <thead class="thead-dark">
+                <tr>
+                    <th>Time</th>
+                    <th>Email</th>
+                    <th>Action</th>
+                    <th>Result</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (pagedResult.RowCount > 0)
+                {
+                    foreach (var log in logDisplay)
+                    {
+                        <tr>
+                            <td>@log.LogTime</td>
+                            <td>@log.Email</td>
+                            <td>@log.Action</td>
+                            <td>@log.Result</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+        
+        <Pager 
+            PagedResult=@pagedResult
+            OnSelected="@(_ => HandlePageIndexSelected(pagedResult))">
+        </Pager>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+
+    readonly AuditLogActionType[] actionOptions = Enum.GetValues(typeof(AuditLogActionType)).Cast<AuditLogActionType>().ToArray();
+
+    List<Data.AuditLog> logDisplay = new List<Data.AuditLog>();
+    string emailFilter = string.Empty;
+    AuditLogActionType actionType = AuditLogActionType.All;
+
+    DateTime fromDateLocal = DateTime.Now;
+    DateTime endDateLocal = DateTime.Now.AddDays(1);    
+
+    protected override async Task OnAfterRenderAsync(bool firstRender){
+        if (firstRender)
+        {
+            spinnerService.Show();
+
+            fromDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow)).Date;
+            endDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow.AddDays(1))).Date;
+        
+            var offSet = await timeZoneService.GetLocalOffset();
+            var from = fromDateLocal.Add(-offSet);
+            var end = endDateLocal.Add(-offSet);
+        
+            var pageSizeOption = PagingExtension.GetPaginationSettingBySemiColon(paginationSetting?.Value?.PageSize ?? string.Empty);
+            var isConvert = int.TryParse(pageSizeOption.First(), out var pageSizeConvert);
+            pagedResult.PageSize = isConvert ? pageSizeConvert : 0;
+            pagedResult.CurrentPage = 1;
+
+            logDisplay = await auditService.GetAuditLogWithFilter(from, end, actionType, emailFilter, pagedResult.CurrentPage, pagedResult.PageSize);
+            await ConvertLocalTimeStamp(logDisplay);
+        
+            pagedResult.RowCount = Convert.ToInt32(await auditService.GetTotalRecordWithFilter(from, end, actionType, emailFilter));
+            pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+
+            StateHasChanged();
+            spinnerService.Hide();
+        }
+    }
+
+    async Task FilterLog() {
+        spinnerService.Show();
+
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.Add(-offSet);
+        var end = endDateLocal.Add(-offSet);
+        
+        logDisplay = await auditService.GetAuditLogWithFilter(from, end, actionType, emailFilter, pagedResult.CurrentPage, pagedResult.PageSize);
+
+        pagedResult.RowCount = Convert.ToInt32(await auditService.GetTotalRecordWithFilter(from, end, actionType, emailFilter));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+        pagedResult.CurrentPage = 1;
+        await ConvertLocalTimeStamp(logDisplay);
+        
+        spinnerService.Hide();
+    }
+
+    async Task ConvertLocalTimeStamp(List<Data.AuditLog> input) {
+        
+        foreach (var log in input)
+        {
+            log.LogTime = (await timeZoneService.GetLocalDateTime(log.LogTime)).DateTime;
+        }
+    }
+    
+    #region Pagination
+    PagedResult<AuditLog> pagedResult = new PagedResult<AuditLog>();
+
+    async Task HandlePageIndexSelected(PagedResultBase pagedResultBase)
+    {
+        spinnerService.Show();
+
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.Add(-offSet);
+        var end = endDateLocal.Add(-offSet);
+        
+        pagedResult = (PagedResult<AuditLog>) pagedResultBase;
+
+        logDisplay = await auditService.GetAuditLogWithFilter(from, end, actionType, emailFilter, pagedResult.CurrentPage, pagedResult.PageSize);
+        
+        pagedResult.RowCount = Convert.ToInt32(await auditService.GetTotalRecordWithFilter(from, end, actionType, emailFilter));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResultBase.PageSize);
+        pagedResult.CurrentPage = pagedResultBase.CurrentPage;
+        
+        await ConvertLocalTimeStamp(logDisplay);
+        spinnerService.Hide();
+    }
+    
+    #endregion
+
+}

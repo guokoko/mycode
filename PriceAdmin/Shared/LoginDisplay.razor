@@ -1,0 +1,59 @@
+@using Microsoft.AspNetCore.Identity
+@using AspNetCore.Identity.Mongo.Model
+@using System.Security.Claims
+@using CTO.Price.Admin.Data
+@using CTO.Price.Admin.Services
+@using RZ.Foundation
+@using RZ.Foundation.Extensions
+@using RZ.Foundation.Types
+
+@inject IAuditService auditService;
+@inject IUserService userService
+@inject IUserRoleService userRoleService
+
+<AuthorizeView>
+    <Authorized>
+        Hello, @email
+        <form method="post" class="form-inline" action="/Account/Logout">
+            <button type="submit" class="nav-link btn btn-link text-dark">Logout</button>
+        </form>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+
+    private string email = string.Empty;
+    public static string userRole = string.Empty;
+    public static string userName = string.Empty;
+    private ClaimsIdentity? identity;
+    
+    protected override async Task OnInitializedAsync() {
+        identity = (await AuthenticationStateTask).User.Identity as ClaimsIdentity;
+        
+        userName = identity!.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value ?? string.Empty;
+        var user = await userService.GetUserByName(userName);
+        if (user.IsSome)
+        {
+            email = user.Get()?.Email ?? string.Empty;
+            var roleId = user.Get()?.Roles?.First() ?? string.Empty;
+            var role = await userRoleService.GetUserRoleById(roleId);
+
+            user.Then(u => {
+                               userRole = role.Get().Role;
+                               identity.AddClaim(new Claim(ClaimTypes.Role, userRole));
+                               identity.AddClaim(new Claim("preferred_username", email));
+            }, () =>
+                userRole = UserRole.Anonymous
+                );            
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender) {
+        if (firstRender) {
+            var actionType = identity!.IsAuthenticated ? AuditLogActionType.Login : AuditLogActionType.Logout;
+            await auditService.CreateLogMessage(email, actionType, DateTime.UtcNow);
+        }
+    }
+}

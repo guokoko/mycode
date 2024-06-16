@@ -1,0 +1,34 @@
+@model CTO.Price.Admin.Data.LoginViewModel
+
+@{
+    ViewData["Title"] = "Log in";    
+}
+
+@if (!string.IsNullOrEmpty(TempData["RedirectErrorMessage"]?.ToString()))
+{
+    <span class="text-danger">@TempData["RedirectErrorMessage"]</span>    
+}
+@if (!string.IsNullOrEmpty(TempData["RedirectSuccessMessage"]?.ToString()))
+{
+    <span class="text-success">@TempData["RedirectSuccessMessage"]</span>    
+}
+
+<div class="field-wrap mt-2" id="external-login">
+    <partial name="_AzureAuthentication"/>
+</div>
+
+<div class="field-wrap mt-2" id="internal-login">
+    <form method="post">  
+        <div class="field-wrap mt-2">
+            <input placeholder="User email" asp-for="UserEmail" class="form-control" />
+            <span asp-validation-for="UserEmail" class="text-danger"></span>
+        </div>
+
+        <div class="field-wrap mt-2">
+            <input placeholder="Password" asp-for="Password" class="form-control" />
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+
+        <button type="submit" class="btn btn-lg col-md-12 mt-3">Log In</button>    
+    </form>
+</div>

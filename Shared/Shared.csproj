@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <AssemblyName>CTO.Price.Shared</AssemblyName>
+        <RootNamespace>CTO.Price.Shared</RootNamespace>
+        <LangVersion>8</LangVersion>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Protobuf Include="..\Shared\Protos\performance.proto" Link="Protos\performance.proto" ProtoRoot=".." />
+        <Protobuf Include="..\Shared\Protos\price-api.proto" Link="Protos\price-api.proto" ProtoRoot=".." />
+        <Protobuf Include="..\Shared\Protos\price-api-v2.proto" Link="Protos\price-api-v2.proto" ProtoRoot=".." />
+        <Protobuf Include="..\Shared\Protos\systeminfo.proto" Link="Protos\systeminfo.proto" ProtoRoot=".." />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Akka.Cluster" Version="1.4.6" />
+        <PackageReference Include="Akka.Cluster.Tools" Version="1.4.6" />
+        <PackageReference Include="AWSSDK.S3" Version="3.7.100" />
+        <PackageReference Include="Akka.DI.Core" Version="1.4.4" />
+        <PackageReference Include="CodeGeneration.Roslyn.BuildTime" Version="0.6.1">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Confluent.Kafka" Version="1.5.1" />
+        <PackageReference Include="CsvHelper" Version="22.1.0" />
+        <PackageReference Include="Grpc.Core.Api" Version="2.27.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="3.1.7" />
+        <PackageReference Include="Microsoft.JSInterop" Version="3.1.0" />
+        <PackageReference Include="MongoDB.Driver" Version="2.21.0" />
+        <PackageReference Include="RZ.Foundation" Version="2.0.4" />
+        <PackageReference Include="Serilog" Version="2.10.0-dev-01191" />
+        <PackageReference Include="System.Linq.Async" Version="4.1.1" />
+        <PackageReference Include="LanguageExt.Core" Version="3.4.10" />
+        <PackageReference Include="LanguageExt.CodeGen" Version="3.4.15" PrivateAssets="all" />
+        <PackageReference Include="CodeGeneration.Roslyn.BuildTime" Version="0.6.1" PrivateAssets="all" />
+        <DotNetCliToolReference Include="dotnet-codegen" Version="0.6.1" />
+        <PackageReference Include="Google.Protobuf" Version="3.12.0" />
+        <PackageReference Include="Grpc.Net.Client" Version="2.28.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.28.0" />
+        <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Update="Actor\NodeManagerProxy.cs">
+            <Generator>MSBuild:GenerateCodeFromAttributes</Generator>
+        </Compile>
+        <Compile Update="Services\IPerformanceControlFacade.cs">
+            <Generator>MSBuild:GenerateCodeFromAttributes</Generator>
+        </Compile>
+        <Compile Update="Actor\NodeManager.cs">
+            <Generator>MSBuild:GenerateCodeFromAttributes</Generator>
+        </Compile>
+    </ItemGroup>
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

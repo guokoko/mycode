@@ -1,0 +1,117 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "CTO.Price.Proto.V2";
+package price_api.v2;
+
+service PriceApi {
+    rpc GetPricesByStore (GetPricesByStoreParam) returns (GetPricesReply);
+    rpc GetPricesByChannel (GetPricesByChannelParam) returns (GetPricesReply);
+    rpc UpdatePrice (PriceUpdateParam) returns (google.protobuf.Empty);
+    rpc GetSchedules (GetSchedulesParam) returns (stream GetSchedulesReply);
+    rpc DeleteSchedule (DeleteScheduleParam) returns (google.protobuf.Empty);
+    rpc UpdatePrices (stream Chunk) returns (google.protobuf.Empty);
+    rpc GetPriceMetrics (google.protobuf.Empty) returns (PriceMetrics);
+    rpc GetPricesBySku (GetPricesBySkuParam) returns (GetPricesReply);
+}
+
+message Chunk {
+    bytes Content = 1;
+}
+
+message DeleteScheduleParam {
+    string channel = 2;
+    string store = 3;
+    string sku = 4;
+    google.protobuf.Timestamp start = 5;
+    google.protobuf.Timestamp end = 6;
+}
+
+message GetPricesByStoreParam {
+    string store = 3;
+    repeated string skus = 4;
+}
+
+message GetPricesByChannelParam {
+    string channel = 2;
+    string store = 3;
+    repeated string skus = 4;
+}
+
+message GetPricesBySkuParam {
+    string sku = 1;    
+}
+
+message GetPricesReply {
+    string version = 1;
+
+    repeated PriceInfo details = 2;
+    repeated string unknown_skus = 3;
+
+    message PriceInfo {
+        string channel = 2;
+        string store = 3;
+        string sku = 4;
+        PriceDetailInfo details = 5;
+
+        // JSON payload of additional data
+        string additional_data = 6;
+
+        message PriceDetailInfo {
+            string vat_rate = 1;
+            PriceValue price = 2;
+            PriceValue special_price = 3;
+            PriceDateRange special_period = 4;
+
+            message PriceDateRange {
+                google.protobuf.Timestamp start = 1;
+                google.protobuf.Timestamp end = 2;
+            }
+        }
+    }
+}
+
+message PriceUpdateParam {
+    string channel = 2;
+    string store = 3;
+    string sku = 4;
+    string vat_rate = 5;                        //nullable
+    PriceDescription original_price = 6;        //nullable
+    PriceDescription sale_price = 7;            //nullable
+    PriceDescription promotion_price = 8;       //nullable
+    google.protobuf.Timestamp timestamp = 10;
+}
+
+message GetSchedulesParam {
+    string channel = 2;
+    string store = 3;
+    string sku = 4;
+}
+
+message GetSchedulesReply {
+    google.protobuf.Timestamp start = 1;
+    google.protobuf.Timestamp end = 2;
+    PriceValue original_price_schedule = 3;     //nullable
+    PriceValue sale_price_schedule = 4;         //nullable
+    PriceValue promotion_price_schedule = 5;    //nullable
+}
+
+message PriceDescription {
+    string PriceVat = 1;
+    string PriceNonVat = 2;
+    google.protobuf.Timestamp start = 3;
+    google.protobuf.Timestamp end = 4;
+}
+
+message PriceValue {
+    string vat = 1;
+    string non_vat = 2;
+}
+
+message PriceMetrics {
+    int64 totalPrices = 1;
+    int64 totalSchedules = 2;
+    int64 totalPendingStartSchedules = 3;
+    int64 totalPendingEndSchedules = 4;
+}

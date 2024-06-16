@@ -1,0 +1,191 @@
+@page "/systemlog"
+@using CTO.Price.Shared.Domain
+@using CTO.Price.Shared.Extensions
+@using Microsoft.Extensions.Options
+@using CTO.Price.Shared.Services
+@using ISystemLogService = CTO.Price.Admin.Services.ISystemLogService
+@using CTO.Price.Admin.Data
+@using CTO.Price.Admin.Services
+@using CTO.Price.Shared.Enums
+
+@inject ISystemLogService systemLogService;
+@inject IOptions<PaginationSetting> paginationSetting;
+@inject TimeZoneService timeZoneService
+@inject SpinnerService spinnerService
+
+<AuthorizeView Policy="@RolePolicy.SystemLog.ToString()">
+    <Authorized>
+        <div>
+            <div class="row">
+                <div class="col-2">
+                    <input id="fromDate" type="date" class="form-control" @bind="@fromDateLocal">
+                </div>
+                <div class="col-2">
+                    <input id="endDate" type="date" class="form-control" @bind="@endDateLocal">
+                </div>
+                <div class="col-2">
+                    <select class="form-control" @onchange="@ConvertLogLevelEnum">
+                        @foreach (var option in levelOptions)
+                        {
+                            <option value="@option">@(option?.ToString() ?? "Log level")</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-2">
+                    <input id="bu" type="text" placeholder="Message" class="form-control" @bind="@message">
+                </div>
+                <div class="col-2">
+                    <input id="channel" type="text" placeholder="Project name" class="form-control" @bind="@projectName">
+                </div>
+                <div class="col-1">
+                    <button type="submit" class="btn btn-primary mb-2" @onclick=@(async () => await FilterLog())>Search</button>
+                </div>
+            </div>
+            <div>
+                <table class="table table-striped">
+                    <thead class="thead-dark">
+                    <tr class="row">
+                        <th class="col-2">Timestamp</th>
+                        <th class="col-2">Project Name</th>
+                        <th class="col-1">Level</th>
+                        <th class="col-3">Message</th>
+                        <th class="col-4">Message Detail</th>
+                     </tr>
+                    </thead>
+                    <tbody>
+                    @if (pagedResult.RowCount > 0)
+                    {
+                        foreach (var log in systemLogDisplay)
+                        {
+                            <tr class="row">
+                                <td class="col-2">@log.Timestamp</td>
+                                <td class="col-2">@log.ProjectName</td>
+                                <td class="col-1">@log.Level</td>
+                                <td class="col-3 text-break">@log.Message</td>
+                                <td class="col-4 text-break">@log.MessageDetail</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>     
+                </table>
+            </div>
+
+            <Pager
+                PagedResult=@pagedResult
+                OnSelected="@(_ => HandlePageIndexSelected(pagedResult))">
+            </Pager>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    List<Price.Shared.Log.SystemLog> systemLogDisplay = new List<Price.Shared.Log.SystemLog>();
+
+    DateTime fromDateLocal;
+    DateTime endDateLocal;
+
+    string message = string.Empty;
+    string projectName = string.Empty;
+
+    List<LogLevelEnum?> levelOptions = Enum.GetValues(typeof(LogLevelEnum)).Cast<LogLevelEnum?>().ToList();
+    LogLevelEnum? logLevelEnum;
+    
+    void ConvertLogLevelEnum(ChangeEventArgs e)
+    {
+        LogLevelEnum logLevelEnumConvert;
+        var isLogLevelEnum = Enum.TryParse(e.Value.ToString(), true, out logLevelEnumConvert);
+        logLevelEnum = isLogLevelEnum ? logLevelEnumConvert : (LogLevelEnum?) null;
+    }
+    
+    #region Pagination
+
+    PagedResult<Price.Shared.Log.SystemLog> pagedResult = new PagedResult<Price.Shared.Log.SystemLog>();
+
+    async Task HandlePageIndexSelected(PagedResultBase pagedResultBase)
+    {
+        spinnerService.Show();
+        
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.AddHours(-offSet.Hours);
+        var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+        
+        pagedResult = (PagedResult<Price.Shared.Log.SystemLog>) pagedResultBase;
+        systemLogDisplay = await systemLogService.GetSystemLogWithFilter(from, end, projectName, logLevelEnum, message, pagedResultBase.CurrentPage, pagedResultBase.PageSize);
+
+        pagedResult.RowCount = Convert.ToInt32(await systemLogService.GetTotalRecordWithFilter(from, end, projectName, logLevelEnum, message));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResultBase.PageSize);
+        pagedResult.CurrentPage = pagedResultBase.CurrentPage;
+
+        await ConvertLocalTimeStamp(systemLogDisplay);
+        StateHasChanged();
+        spinnerService.Hide();
+    }
+
+    #endregion
+
+    protected override void OnInitialized()
+    {
+        levelOptions.Insert(0, null);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            spinnerService.Show();
+
+            fromDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow)).Date;
+            endDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow.AddDays(1))).Date;
+
+            var offSet = await timeZoneService.GetLocalOffset();
+            var from = fromDateLocal.AddHours(-offSet.Hours);
+            var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+
+            var pageSizeOption = PagingExtension.GetPaginationSettingBySemiColon(paginationSetting?.Value?.PageSize ?? string.Empty);
+            pagedResult.PageSize = Convert.ToInt32(pageSizeOption?.First());
+            pagedResult.CurrentPage = 1;
+
+            systemLogDisplay = await systemLogService.GetSystemLogWithFilter(from, end, projectName, logLevelEnum, message, 1, pagedResult.PageSize);
+        
+            pagedResult.RowCount = Convert.ToInt32(await systemLogService.GetTotalRecordWithFilter(from, end, projectName, logLevelEnum, message));
+            pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+
+            await ConvertLocalTimeStamp(systemLogDisplay);
+
+            StateHasChanged();
+            spinnerService.Hide();
+        }
+    }
+
+    async Task ConvertLocalTimeStamp(List<Price.Shared.Log.SystemLog> input)
+    {
+        foreach (var eventLog in input)
+        {
+            eventLog.Timestamp = (await timeZoneService.GetLocalDateTime(eventLog.Timestamp)).DateTime;
+        }
+    }
+
+    #region Filter
+
+    async Task FilterLog()
+    {
+        spinnerService.Show();
+        
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.AddHours(-offSet.Hours);
+        var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+        
+        systemLogDisplay = await systemLogService.GetSystemLogWithFilter(from, end, projectName, logLevelEnum, message, 1, pagedResult.PageSize);
+
+        pagedResult.RowCount = Convert.ToInt32(await systemLogService.GetTotalRecordWithFilter(from, end, projectName, logLevelEnum, message));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+        pagedResult.CurrentPage = 1;
+        await ConvertLocalTimeStamp(systemLogDisplay);
+        
+        spinnerService.Hide();
+    }
+
+    #endregion
+
+}

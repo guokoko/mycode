@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Google.Protobuf" Version="3.12.0" />
+      <PackageReference Include="Grpc.Net.Client" Version="2.28.0" />
+      <PackageReference Include="Grpc.Tools" Version="2.28.0" />
+      <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+      <PackageReference Include="AWSSDK.Core" Version="3.7.100.14" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="..\..\Shared\Protos\performance.proto" Link="Protos\performance.proto" ProtoRoot="..\.." />
+        <Protobuf Include="..\..\Shared\Protos\price-api.proto" Link="Protos\price-api.proto" ProtoRoot="..\.." />
+        <Protobuf Include="..\..\Shared\Protos\systeminfo.proto" Link="Protos\systeminfo.proto" ProtoRoot="..\.." />
+    </ItemGroup>
+    <ItemGroup>
+      <None Remove="AWSSDK.Core" />
+    </ItemGroup>
+</Project>

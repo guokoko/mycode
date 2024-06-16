@@ -1,0 +1,45 @@
+﻿@using System.Security.Claims
+@using CTO.Price.Admin.Services
+@inherits LayoutComponentBase
+
+@inject IUserService userService;
+@inject IUserRoleService userRoleService;
+
+<Spinner/>
+<div class="sidebar">
+    <NavMenu/>
+</div>
+
+<div class="main">
+    <div class="top-row px-4 auth">
+        <LoginDisplay/>
+    </div>
+
+    <div class="content px-4">
+        @Body
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync() {
+        var identity = (await AuthenticationStateTask).User.Identity as ClaimsIdentity;
+        if (identity != null 
+            && identity.Claims.FirstOrDefault(r => r.Type == ClaimTypes.Role)?.Value != "Admin") {
+            if (!string.IsNullOrEmpty(LoginDisplay.userRole))
+                identity.AddClaim(new Claim(ClaimTypes.Role, LoginDisplay.userRole));
+            else {
+                var email = identity!.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value ?? string.Empty;
+                var userData = await userService.GetUserByEmail(email.ToLower());
+                if (userData.IsSome)
+                {
+                    var roleId = userData.Get().Roles.First();
+                    var role = await userRoleService.GetUserRoleById(roleId);
+                    identity.AddClaim(new Claim(ClaimTypes.Role, role.Get()?.Role ?? string.Empty));
+                }
+            }
+        }
+    }
+}

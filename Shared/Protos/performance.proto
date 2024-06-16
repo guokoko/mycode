@@ -1,0 +1,18 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+option csharp_namespace = "CTO.Price.Protos";
+
+service PerformanceInfo {
+    rpc GetCounter (google.protobuf.Empty) returns (PerformanceReply);
+    rpc ResetCounter (google.protobuf.Empty) returns (PerformanceReply);
+}
+
+message PerformanceReply {
+    string Inbound = 1;
+    string Outbound = 2;
+    repeated string GetApiPerformance = 3;
+    string Ips = 4;
+    string Ops = 5;
+    string since = 6;
+}

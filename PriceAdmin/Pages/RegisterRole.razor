@@ -1,0 +1,279 @@
+@page "/registerrole"
+
+@using CTO.Price.Admin.Data
+@using CTO.Price.Admin.Services
+@using CTO.Price.Shared
+@using System.Security.Claims
+
+@inject IUserRoleService userRoleService;
+@inject IUserService userService;
+@inject IAuditService auditService;
+@inject SpinnerService spinnerService
+
+<AuthorizeView Policy="@RolePolicy.RegisterRole.ToString()">
+    <Authorized>
+        <div>
+            <p class="bg-light text-center font-italic" style="color:#4BB543">@pageMessage</p>
+            <p class="bg-light text-center font-italic" style="color:#ff0000">@pageError</p>
+        </div>
+
+        <h1>Register Role</h1>
+        <table class="table">
+            <thead class="thead-dark">
+            <tr>
+                <th>Role</th>
+                <th>Policies</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var role in roles) {
+                <tr>
+                    <td>@role.Role</td>
+                    <td>
+                        <ul>
+                        @foreach (var policyDetail in role.Policy) {
+                            <li>@policyDetail.ToString()</li>
+                        }
+                        </ul>
+                    </td>
+                    <td>
+                        <!-- Edit the current forecast -->
+                        <button class="btn btn-primary"
+                                @onclick="(() => EditRole(role))">
+                            Edit
+                        </button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        @if (showPopup) {
+            <div class="modal" tabindex="-1" style="display:block" role="dialog">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 class="modal-title">@updateRoleTitle</h3>
+                            <button type="button" class="close"
+                                    @onclick="ClosePopup">
+                                <span aria-hidden="true">X</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            Role : 
+                            @if (isEdit) {
+                                <p>@currentRoleDetail</p>
+                            }
+                            else {
+                                <input class="form-control" type="text"
+                                       placeholder="Role"
+                                       @bind="@currentRoleDetail"/>
+                            }
+                            @foreach (var policy in checkboxPolicy.Keys)
+                            {
+                                <input type="checkbox" id="@policy.ToString()" @bind="checkboxPolicy[policy]"/><label for="@policy.ToString()">@policy.ToString()</label><br/>
+                            }
+                            <br/><br/>
+                            <button class="btn btn-primary"
+                                    @onclick="SaveRole">
+                                Save
+                            </button>
+                            @if (currentRole.Role != "") {
+                                <button class="btn btn-danger"
+                                        @onclick="DeleteRole">
+                                    Delete
+                                </button>
+                            }
+                            <br/>
+                            <span style="color:#ff0000">@popupError</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        <button class="btn btn-success" @onclick="AddRole">Add Role</button>
+    </Authorized>
+</AuthorizeView>
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+    private ClaimsIdentity? identity;
+    
+    string updateRoleTitle = string.Empty;
+    List<UserRole> roles = new List<UserRole>();
+    UserRole currentRole = null!;
+    string currentRoleDetail = null!;
+    
+    bool showPopup;
+    bool isEdit;
+    string pageMessage = string.Empty;
+    string pageError = string.Empty;
+    string popupError = string.Empty;
+
+    Dictionary<RolePolicy, bool> checkboxPolicy = new Dictionary<RolePolicy, bool>();
+
+    protected override async Task OnInitializedAsync() {
+        spinnerService.Show();
+        identity = (await AuthenticationStateTask).User.Identity as ClaimsIdentity;
+        roles = await userRoleService.GetAllUserRole();
+        var policies = Enum.GetValues(typeof(RolePolicy)).Cast<RolePolicy>().ToArray();
+        foreach (var policy in policies) {
+            checkboxPolicy.Add(policy, policy == RolePolicy.Home);
+        }
+        ClearMessage();
+        spinnerService.Hide();
+    }
+    
+    void AddRole()
+    {
+        updateRoleTitle = "Add Role";
+        isEdit = false;
+        currentRole = new UserRole();
+        currentRoleDetail = currentRole.Role;
+        ClearCheckbox();
+        DisplayPopUp();
+    }
+
+    async Task SaveRole() {
+        spinnerService.Show();
+        if (ValidateRole(currentRoleDetail)) {
+            ClosePopup();
+            currentRole.Role = currentRoleDetail;
+            currentRole.Policy = GetPolicyListFromCheckbox();
+            var result = await userRoleService.UpdateUserRole(currentRole);
+            if (result.IsSuccess) {
+                HandleResult(result.GetSuccess());
+                await WriteAuditLog($"Success - updated role {currentRoleDetail}");
+                if (!isEdit)
+                {
+                    await userRoleService.UpdateUserRole(currentRole);
+                    roles.Add(currentRole);
+                }
+            }
+            else {
+                HandleResult(UpdateState.Ignore);
+                var exception = result.GetFail();
+                await WriteAuditLog($"Failure - updated role - {exception.Message}");
+            }
+        }
+        spinnerService.Hide();
+    }
+    async Task DeleteRole()
+    {
+        spinnerService.Show();        
+        var role = await userRoleService.GetUserRole(currentRoleDetail);
+        var users = (await userService.GetAllUser()).Where(u => u.Roles.Contains(role.Get()?.Id)).ToArray();
+        if (users.Length == 0) {
+            ClosePopup();
+            var result = await userRoleService.DeleteUserRole(currentRole);
+            if (result.IsSuccess)
+            {
+                await userRoleService.DeleteUserRole(role.Get());
+                HandleResult(result.GetSuccess());
+                await WriteAuditLog($"Success - deleted role {currentRole.Role}");
+                roles.Remove(currentRole);
+            }
+            else {
+                HandleResult(UpdateState.Ignore);
+                var exception = result.GetFail();
+                await WriteAuditLog($"Failure - deleted role - {exception.Message}");
+            }
+        }
+        else {
+            popupError = "This role is being used. Unable to delete.";
+        }
+        spinnerService.Hide();
+    }
+
+    void EditRole(UserRole selectedRole) {
+        updateRoleTitle = "Edit Role";
+        isEdit = true;
+        currentRoleDetail = selectedRole.Role;
+        currentRole = selectedRole;
+        SetCheckbox(selectedRole.Policy);
+        DisplayPopUp();
+    }
+
+    void ClosePopup() {
+        popupError = string.Empty;
+        showPopup = false;
+    }
+
+    void DisplayPopUp() {
+        ClearMessage();
+        showPopup = true;
+    }
+
+    void DisplayMessage(string message) {
+        pageMessage = message;
+        pageError = string.Empty;
+    }
+
+    void DisplayError(string message) {
+        pageError = message;
+        pageMessage = string.Empty;
+    }
+
+    void ClearMessage() {
+        pageMessage = string.Empty;
+        pageError = string.Empty;
+    }
+
+    RolePolicy[] GetPolicyListFromCheckbox() {
+        return checkboxPolicy.Where(c => c.Value).Select(c => c.Key).ToArray();
+    }
+
+    void ClearCheckbox() {
+        var keys = checkboxPolicy.Where(c => c.Key != RolePolicy.Home).Select(c => c.Key).ToArray();
+        foreach (var key in keys) {
+            checkboxPolicy[key] = false;
+        }
+        checkboxPolicy[RolePolicy.Home] = true;
+    }
+
+    void SetCheckbox(RolePolicy[] policies) {
+        foreach (var key in checkboxPolicy.Keys.ToArray()) {
+            checkboxPolicy[key] = policies.Contains(key);
+        }
+    }
+
+    void HandleResult(UpdateState result) {
+        switch (result) {
+            case UpdateState.Updated:
+                DisplayMessage("Role updated successful");
+                break;
+            case UpdateState.Deleted:
+                DisplayMessage("Role deleted successful");
+                break;
+            default:
+                DisplayError("Update Role failure");
+                break;
+        }
+    }
+    
+    bool ValidateRole(string roleDetail) {
+        if (isEdit)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(roleDetail)) {
+            popupError = "Role can't be empty";
+            return false;
+        }
+
+        if (roles.Count(u => u.Role.ToLower() == roleDetail.ToLower()) > 0) {
+            popupError = "Role duplicate!";
+            return false;
+        }
+
+        return true;
+    }
+
+    async Task WriteAuditLog(string result) {
+        var userName = identity!.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value ?? string.Empty;
+        var user = await userService.GetUserByName(userName);
+        var email = user.IsSome ? user.Get()?.Email : string.Empty;
+        await auditService.CreateLogMessage(email!, AuditLogActionType.RegisterRole, result, DateTime.UtcNow);
+    }
+}

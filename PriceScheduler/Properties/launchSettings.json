@@ -1,0 +1,121 @@
+﻿{
+  "profiles": {
+    "PriceScheduler": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4005",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "seed, scheduler, importer, herald, metric, publisher",
+        "ActorSystem__InternalBinding": "localhost:5005",
+        "ActorSystem__ExternalBinding": "localhost:5005",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005"
+      }
+    },
+    "PriceScheduler - Seed 1": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4005",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "seed",
+        "ActorSystem__InternalBinding": "localhost:5005",
+        "ActorSystem__ExternalBinding": "localhost:5005",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005,akka.tcp://price-service@localhost:5006,akka.tcp://price-service@localhost:5007"
+      }
+    },
+    "PriceScheduler - Seed 2": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4006",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "seed",
+        "ActorSystem__InternalBinding": "localhost:5006",
+        "ActorSystem__ExternalBinding": "localhost:5006",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005,akka.tcp://price-service@localhost:5006,akka.tcp://price-service@localhost:5007"
+      }
+    },
+    "PriceScheduler - Seed 3": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4007",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "seed",
+        "ActorSystem__InternalBinding": "localhost:5007",
+        "ActorSystem__ExternalBinding": "localhost:5007",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005,akka.tcp://price-service@localhost:5006,akka.tcp://price-service@localhost:5007"
+      }
+    },
+    "PriceScheduler - Metric": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4008",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "metric",
+        "ActorSystem__InternalBinding": "localhost:5008",
+        "ActorSystem__ExternalBinding": "localhost:5008",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005,akka.tcp://price-service@localhost:5006,akka.tcp://price-service@localhost:5007"
+      }
+    },
+    "PriceScheduler - Scheduler": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4009",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "scheduler",
+        "ActorSystem__InternalBinding": "localhost:5009",
+        "ActorSystem__ExternalBinding": "localhost:5009",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005,akka.tcp://price-service@localhost:5006,akka.tcp://price-service@localhost:5007"
+      }
+    },
+    "PriceScheduler - Herald": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4010",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "herald",
+        "ActorSystem__InternalBinding": "localhost:5010",
+        "ActorSystem__ExternalBinding": "localhost:5010",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005"
+      }
+    },
+    "PriceScheduler - Herald2": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4011",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "herald",
+        "ActorSystem__InternalBinding": "localhost:5011",
+        "ActorSystem__ExternalBinding": "localhost:5011",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005"
+      }
+    },
+    "PriceScheduler - Publisher": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "ASPNETCORE_URLS": "http://*:4012",
+        "DOTNET_ROLL_FORWARD": "Major",
+        "ActorSystem__Roles": "publisher",
+        "ActorSystem__InternalBinding": "localhost:5012",
+        "ActorSystem__ExternalBinding": "localhost:5012",
+        "ActorSystem__Seeds": "akka.tcp://price-service@localhost:5005"
+      }
+    }
+  }
+}

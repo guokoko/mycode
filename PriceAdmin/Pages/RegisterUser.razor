@@ -1,0 +1,528 @@
+@page "/registeruser"
+
+@using CTO.Price.Admin.Services
+@using CTO.Price.Admin.Data
+@using CTO.Price.Shared
+@using Microsoft.AspNetCore.Identity
+@using System.Text.RegularExpressions
+@using CTO.Price.Shared.Domain
+@using CTO.Price.Shared.Enums
+@using CTO.Price.Shared.Extensions
+@using Microsoft.AspNetCore.Authentication.AzureAD.UI
+@using Microsoft.Extensions.Options
+@using RZ.Foundation
+@using System.Security.Claims
+
+@inject IUserService userService;
+@inject IUserRoleService userRoleService;
+@inject IAuditService auditService;
+@inject SpinnerService spinnerService
+@inject IOptions<PaginationSetting> paginationSetting;
+
+<AuthorizeView Policy="@RolePolicy.RegisterUser.ToString()">
+    <Authorized>
+        <div>
+            <p class="bg-light text-center font-italic text-success">@pageMessage</p>
+            <p class="bg-light text-center font-italic text-danger">@pageError</p>
+        </div>
+        
+        <div class="row">
+            <div class="col-2">
+                <input id="emailFilter" type="text" placeholder="Email" class="form-control" @bind="@emailFilter">
+            </div>            
+            <div class="col-2">
+                <select class="form-control" @onchange="@ConvertRoleFilterValue">
+                    @foreach (var option in optionRolesFilter)
+                    {
+                        <option value="@option">@(option ?? "Select Role")</option>
+                    }
+                </select>
+            </div>
+                        
+            <div class="col-2">
+                <select class="form-control" @onchange="@ConvertEmployeeTypeEnum">
+                    @foreach (var option in optionEmployeesFilter){
+                        <option value="@option">@(option ?? "Select Employee Type")</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary ml-3 mb-2" @onclick=@(async () => await FilterUser())>Search</button>
+            <button class="btn btn-success  ml-4 mb-2" @onclick="AddUser">Add User</button>
+        </div>
+        <div>
+            <table class="table">
+                <thead class="thead-dark">
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Employee Type</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td>@user.User.Email</td>
+                        <td>@user.UserRole.Role</td>
+                        <td>@(user.User.Logins.First().LoginProvider.Equals(EmployeeType.Non_CG_Employee.GetDisplayName()) ? EmployeeType.Non_CG_Employee.GetDisplayName() : EmployeeType.CG_Employee.GetDisplayName())</td>
+                        <td>
+                            <!-- Edit the current forecast -->
+                            <button class="btn btn-primary" @onclick="(() => EditUser(user))">Edit</button>
+                        </td>
+                    </tr>
+
+                }
+                </tbody>
+            </table>
+        </div>
+        
+        <Pager
+            PagedResult=@_pagedResult
+            OnSelected="@(_ => HandlePageIndexSelected(_pagedResult))">
+        </Pager>
+        
+        @if (showPopup)
+        {
+            <!-- This is the popup to create or edit a user -->
+            <div class="modal" tabindex="-1" style="display:block" role="dialog">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 class="modal-title">@updateUserTitle</h3>
+                            <!-- Button to close the popup -->
+                            <button type="button" class="close" @onclick="ClosePopup"><span aria-hidden="true">X</span></button>
+                        </div>
+                        <!-- Edit form for the current forecast -->
+                        <div class="modal-body">
+
+                            <!-- Only allow edit if a new user -->
+                            
+                            
+                            @if (isEdit)
+                            {
+                                <p class="mt-4">@currentEmployeeType</p>
+                                <p class="mt-4">@currentUser.User.Email</p>
+                            }
+                            else
+                            {
+                                <select class="form-control mt-4" @onchange="@SetEmployeeType">
+                                    @foreach (var optionEmployee in optionEmployees) {
+                                        <option value="@optionEmployee">@optionEmployee</option>
+                                    }
+                                </select>
+                                
+                                <input class="form-control mt-4" type="text" placeholder="Email" @bind="@currentEmail"/>
+                            }
+                            
+                            @if (!isCgEmplyee && !isEdit)
+                            {
+                                <input class="form-control mt-4" type="password" placeholder="Password" @bind="@password"/>
+                                <input class="form-control mt-4" type="password" placeholder="Confirm Password" @bind="@confirmPassword"/>    
+                            }
+                            
+                            <select class="form-control mt-4" @onchange="@SetSelectedRole">
+                                @foreach (var option in options)
+                                {
+                                    if (currentRoleId == option.Id)
+                                    {
+                                        <option class="mt-4" value="@option.Id" selected="selected">@option.Role</option>       
+                                    }
+                                    else
+                                    {
+                                        <option class="mt-4" value="@option.Id">@option.Role</option>
+                                    }
+                                }
+                            </select>
+                            <!-- Button to save the user -->
+                            <button class="btn btn-primary mt-4 mb-2" @onclick="SaveUser">Save</button>
+                            <!-- Only show delete button if not a new record -->
+                            @if (isEdit && currentUser.User.Email != "")
+                            {
+                                <!-- Button to delete the forecast -->
+                                <button class="btn btn-danger mt-4 mb-2" @onclick="DeleteUser">Delete</button>
+                            }
+                            
+                            @if (popupErrors?.Count > 0)
+                            {
+                                foreach (var error in popupErrors)
+                                {
+                                    <p class="text-danger mb-0">@error</p>   
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }        
+    </Authorized>
+</AuthorizeView>
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+    private ClaimsIdentity? identity;
+    
+    string updateUserTitle = string.Empty;
+    bool isCgEmplyee = true;
+    string confirmPassword = string.Empty;
+    string password = string.Empty;    
+    static List<string> optionEmployees = Enum.GetValues(typeof(EmployeeType)).Cast<EmployeeType>().Select(x => x.GetDisplayName()).ToList();
+    
+    string currentEmployeeType = optionEmployees.First();
+    
+    string emailFilter = string.Empty;
+    string roleFilter = string.Empty;
+    string employeeTypeFilter = string.Empty;
+    List<string?> optionEmployeesFilter = Enum.GetValues(typeof(EmployeeType)).Cast<EmployeeType?>().Select(x => x?.GetDisplayName()).ToList();
+    List<string?> optionRolesFilter = new List<string?>();
+    
+    List<UserRoleViewModel> users = new List<UserRoleViewModel>();
+    UserRoleViewModel currentUser = null!;
+    string currentEmail = null!;
+    string currentRoleId = string.Empty;
+
+    bool showPopup;
+    bool isEdit;
+    List<UserRole> options = new List<UserRole>();
+    string pageMessage = string.Empty;
+    string pageError = string.Empty;
+    List<string> popupErrors = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        spinnerService.Show();
+        
+        identity = (await AuthenticationStateTask).User.Identity as ClaimsIdentity;
+        var pageSizeOption = PagingExtension.GetPaginationSettingBySemiColon(paginationSetting?.Value?.PageSize ?? string.Empty);
+        _pagedResult.PageSize = Convert.ToInt32(pageSizeOption.First());
+        _pagedResult.CurrentPage = 1;
+        
+        if(optionEmployeesFilter.All(x => x != null)) optionEmployeesFilter?.Insert(0, null);
+            
+        users = await userService.GetUserByEmailRoleProvider(emailFilter, roleFilter, employeeTypeFilter, 1, _pagedResult.PageSize);
+        options = await userRoleService.GetAllUserRole();
+            
+        optionRolesFilter = options.Select(x => x?.Role).ToList();
+        optionRolesFilter?.Insert(0, null);
+        
+        _pagedResult.RowCount = Convert.ToInt32(await userService.GetTotalRecordWithFilter(emailFilter, roleFilter, employeeTypeFilter));
+        _pagedResult.PageCount = (int) Math.Ceiling(_pagedResult.RowCount / (decimal) _pagedResult.PageSize);
+        
+        ClearMessage();
+        spinnerService.Hide();
+        
+    }
+    
+    void ConvertRoleFilterValue(ChangeEventArgs e)
+    {
+        roleFilter = e?.Value?.ToString() ?? string.Empty;
+        if (e?.Value != null && e.Value.Equals("Select Role")) roleFilter = string.Empty;
+    }
+    
+    void ConvertEmployeeTypeEnum(ChangeEventArgs e)
+    {        
+        employeeTypeFilter = e.Value.Equals(EmployeeType.Non_CG_Employee.GetDisplayName()) ? EmployeeType.Non_CG_Employee.GetDisplayName() : AzureADDefaults.AuthenticationScheme;
+        if (e.Value.Equals("Select Employee Type")) employeeTypeFilter = string.Empty;
+    }
+
+    void SetEmployeeType(ChangeEventArgs e)
+    {
+        currentEmployeeType = e.Value.ToString() ?? string.Empty;
+        if (currentEmployeeType.Equals(EmployeeType.Non_CG_Employee.GetDisplayName()))
+            isCgEmplyee = false;
+        else
+            isCgEmplyee = true;
+    }
+
+    void SetSelectedRole(ChangeEventArgs e)
+    {
+        currentRoleId = e.Value?.ToString() ?? string.Empty;
+    }
+
+    void AddUser()
+    {
+        updateUserTitle = "Add User";
+        currentEmployeeType = optionEmployees?.FirstOrDefault() ?? string.Empty;
+        isCgEmplyee = currentEmployeeType == EmployeeType.CG_Employee.GetDisplayName();
+        isEdit = false;
+        currentUser = new UserRoleViewModel();
+        currentEmail = string.Empty;
+        password = string.Empty;
+        confirmPassword = string.Empty;
+        //currentRole = options?.Count > 0 ? options.First().Role  : string.Empty;
+        currentRoleId = options?.Count > 0 ? options.First().Id : string.Empty; 
+        DisplayPopUp();
+    }
+
+    async Task SaveUser()
+    {
+        spinnerService.Show();
+        if (ValidateEmail(currentEmail))
+        {
+            var role = !string.IsNullOrEmpty(currentRoleId) ? await userRoleService.GetUserRoleById(currentRoleId) : new Option<UserRole>();
+            //currentRole = role.IsSome ? role.Get().Role : string.Empty;            
+            currentRoleId = role.IsSome ? role.Get().Id : string.Empty;
+
+            bool isUpdatedSuccess = false;
+            ApiResult<UpdateState> result = new ApiResult<UpdateState>();
+            if (!isEdit)
+            {
+                currentUser = new UserRoleViewModel
+                {
+                    User = new ApplicationUser
+                    {
+                        UserName = currentEmail.Substring(0, currentEmail.IndexOf('@')),
+                        Email = currentEmail,
+                        NormalizedEmail = currentEmail.ToUpper(),
+                        NormalizedUserName = currentEmail.Substring(0, currentEmail.IndexOf('@')).ToUpper(),
+                        Roles = new List<string> {currentRoleId},
+                    },
+                    UserRole = (role.IsSome ? role.Get() : null)!
+                };
+                
+                if (isCgEmplyee)
+                {
+                    currentUser.User.Logins = new List<IdentityUserLogin<string>>
+                    {
+                        new IdentityUserLogin<string>
+                        {
+                            LoginProvider = AzureADDefaults.AuthenticationScheme,
+                            ProviderDisplayName = AzureADDefaults.DisplayName
+                        }
+                    };
+                    
+                    var externalResult = await userService.UpdateUser(currentUser.User);
+                    isUpdatedSuccess = externalResult.IsSuccess;
+                    result = isUpdatedSuccess ? UpdateState.Updated : UpdateState.Ignore;
+                }
+                else
+                {
+                    if (ValidatePassword())
+                    {
+                        currentUser.User.Logins = new List<IdentityUserLogin<string>> {new IdentityUserLogin<string> {LoginProvider = EmployeeType.Non_CG_Employee.GetDisplayName()}};
+                        var internalResult = await userService.CreateApplicationUserWithPassword(currentUser.User, password);
+                        isUpdatedSuccess = internalResult.Succeeded;
+                        result = internalResult.Succeeded ? UpdateState.Updated : UpdateState.Ignore;
+                        if (!internalResult.Succeeded)
+                            popupErrors = internalResult.Errors.Select(e => e.Description).ToList();
+                    }
+                }
+            }
+            else
+            {
+                currentUser.UserRole = (role.IsSome ? role.Get() : null)!;  
+                currentUser.User.Roles = new List<string> {currentRoleId};
+                result = await userService.UpdateUser(currentUser.User);
+                isUpdatedSuccess = result.IsSuccess;
+            }
+            
+            if (isUpdatedSuccess)
+            {
+                ClosePopup();
+                HandleResult(result.GetSuccess());
+                await WriteAuditLog($"Success - updated user {currentEmail}");
+                if (!isEdit)
+                {                    
+                    users = await userService.GetUserByEmailRoleProvider(emailFilter, roleFilter, employeeTypeFilter, 1, _pagedResult.PageSize);
+                    _pagedResult.RowCount = Convert.ToInt32(await userService.GetTotalRecordWithFilter(emailFilter, roleFilter, employeeTypeFilter));
+                    _pagedResult.PageCount = (int) Math.Ceiling(_pagedResult.RowCount / (decimal) _pagedResult.PageSize);
+                    _pagedResult.CurrentPage = 1;               
+                }
+            }
+            else if (popupErrors?.Count > 0)
+            {
+                spinnerService.Hide();
+                return; 
+            }
+            else
+            {
+                HandleResult(UpdateState.Ignore);
+                var exception = result.GetFail();
+                await WriteAuditLog($"Failure - updated user - {exception.Message}");
+            }
+        }
+        spinnerService.Hide();
+    }
+
+    async Task DeleteUser()
+    {
+        spinnerService.Show();
+        ClosePopup();
+        var result = await userService.DeleteUser(currentUser.User);
+        if (result.IsSuccess)
+        {
+            HandleResult(result.GetSuccess());
+            await WriteAuditLog($"Success - deleted user {currentUser.User.Email}");
+            users.Remove(currentUser);
+        }
+        else
+        {
+            HandleResult(UpdateState.Ignore);
+            var exception = result.GetFail();
+            await WriteAuditLog($"Failure - deleted role - {exception.Message}");
+        }
+        
+        users = await userService.GetUserByEmailRoleProvider(emailFilter, roleFilter, employeeTypeFilter, 1, _pagedResult.PageSize);
+        _pagedResult.RowCount = Convert.ToInt32(await userService.GetTotalRecordWithFilter(emailFilter, roleFilter, employeeTypeFilter));
+        _pagedResult.PageCount = (int) Math.Ceiling(_pagedResult.RowCount / (decimal) _pagedResult.PageSize);
+        _pagedResult.CurrentPage = 1;   
+        spinnerService.Hide();
+    }
+
+    private void EditUser(UserRoleViewModel selectedUser)
+    {
+        updateUserTitle = "Edit User";
+        currentEmployeeType = selectedUser!.User.Logins!.FirstOrDefault()!.LoginProvider!.Equals(EmployeeType.Non_CG_Employee.GetDisplayName(), StringComparison.OrdinalIgnoreCase) ? EmployeeType.Non_CG_Employee.GetDisplayName() : EmployeeType.CG_Employee.GetDisplayName();
+        isCgEmplyee = currentEmployeeType == EmployeeType.CG_Employee.GetDisplayName();
+        isEdit = true;
+        currentEmail = selectedUser!.User.Email;
+        currentRoleId = selectedUser!.User.Roles!.First();
+        currentUser = selectedUser;
+        DisplayPopUp();
+    }
+
+    void ClosePopup()
+    {
+        popupErrors = new List<string>();
+        showPopup = false;
+    }
+
+    void DisplayPopUp()
+    {
+        ClearMessage();
+        showPopup = true;
+    }
+
+    void DisplayMessage(string message)
+    {
+        pageMessage = message;
+        pageError = string.Empty;
+    }
+
+    void DisplayError(string message)
+    {
+        pageError = message;
+        pageMessage = string.Empty;
+    }
+
+    void ClearMessage()
+    {
+        pageMessage = string.Empty;
+        pageError = string.Empty;
+    }
+
+    void HandleResult(UpdateState result)
+    {
+        switch (result)
+        {
+            case UpdateState.Updated:
+                DisplayMessage("User updated successful");
+                break;
+            case UpdateState.Deleted:
+                DisplayMessage("User deleted successful");
+                break;
+            default:
+                DisplayError("Update user failure");
+                break;
+        }
+    }
+
+    bool ValidateEmail(string email)
+    {
+        if (isEdit)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            popupErrors = new List<string>{"Email can't be empty"};            
+            return false;
+        }
+
+        if (users.Count(u => u.User.Email.ToLower() == email.ToLower()) > 0)
+        {
+            popupErrors = new List<string>{"Email duplicate!"};
+            return false;
+        }
+
+        var regex = @"\A(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\Z";
+        bool isEmail = Regex.IsMatch(email, regex, RegexOptions.IgnoreCase);
+        if (!isEmail)
+        {
+            popupErrors = new List<string>{"The Email field is not a valid e-mail address"};
+            return  false;
+        }
+            
+
+        return true;
+    }
+    
+    bool ValidatePassword()
+    {
+        if(isEdit)
+            return true;
+        
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            popupErrors = new List<string>{"Password can't be empty"};
+            return false;
+        }
+        
+        if (string.IsNullOrWhiteSpace(confirmPassword))
+        {
+            popupErrors = new List<string>{"Confirm password can't be empty"};
+            return false;
+        }
+        
+        if (!password.Equals(confirmPassword))
+        {
+            popupErrors = new List<string>{"Password doesn't match with confirm password"};
+            return false;
+        }
+
+        return true;
+    }
+
+    async Task WriteAuditLog(string result)
+    {
+        var userName = identity!.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value ?? string.Empty;
+        var user = await userService.GetUserByName(userName);
+        var email = user.IsSome ? user.Get()?.Email : string.Empty;   
+        await auditService.CreateLogMessage(email!, AuditLogActionType.RegisterUser, result, DateTime.UtcNow);
+    }
+    
+    #region Filter
+
+    async Task FilterUser()
+    {   
+        spinnerService.Show();
+        users = await userService.GetUserByEmailRoleProvider(emailFilter, roleFilter, employeeTypeFilter, 1, _pagedResult.PageSize);
+        _pagedResult.RowCount = Convert.ToInt32(await userService.GetTotalRecordWithFilter(emailFilter, roleFilter, employeeTypeFilter));
+        _pagedResult.PageCount = (int) Math.Ceiling(_pagedResult.RowCount / (decimal) _pagedResult.PageSize);
+        _pagedResult.CurrentPage = 1;
+        spinnerService.Hide();
+    }
+
+    #endregion
+
+    #region Pagination
+
+    static PagedResult<UserRoleViewModel> _pagedResult = new PagedResult<UserRoleViewModel>();
+
+    async Task HandlePageIndexSelected(PagedResultBase pagedResult)
+    {
+        spinnerService.Show();
+
+        _pagedResult = (PagedResult<UserRoleViewModel>) pagedResult;
+        users = await userService.GetUserByEmailRoleProvider(emailFilter, roleFilter, employeeTypeFilter, pagedResult.CurrentPage, pagedResult.PageSize);
+
+        _pagedResult.RowCount = Convert.ToInt32(await userService.GetTotalRecordWithFilter(emailFilter, roleFilter, employeeTypeFilter));
+        _pagedResult.PageCount = (int) Math.Ceiling(_pagedResult.RowCount / (decimal) pagedResult.PageSize);
+        _pagedResult.CurrentPage = pagedResult.CurrentPage;
+        
+        spinnerService.Hide();
+    }
+
+    #endregion
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+option csharp_namespace = "CTO.Price.Protos";
+
+package system_info;
+
+service ServiceInfo {
+    rpc Version (google.protobuf.Empty) returns (VersionReply);
+}
+
+
+
+message VersionReply {
+    string Version = 1;
+}

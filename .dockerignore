@@ -1,0 +1,9 @@
+.git/
+*Dockerfile
+[b|B]in
+[O|o]bj
+TestResults/
+DevKeys/
+*/temp*
+*/*/temp*
+temp?

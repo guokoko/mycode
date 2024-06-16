@@ -1,0 +1,32 @@
+﻿@{
+    ViewData["Title"] = "Log in";
+    Layout = "_Layout";
+}
+
+<div class="col-sm-12 align-self-center">
+    <div class="row h-100">
+        <div class="col-sm-12 align-self-center">
+            <h1 class="text-center">Price Admin</h1>
+        </div>
+    </div>
+    <ul class="tab-group">
+        <li class="tab active">
+            <a href="#login">Log In</a>
+        </li>
+        <li class="tab">
+            <a href="#signup">Sign Up</a>
+        </li>
+    </ul>
+    <div class="tab-content">
+        <div id="login">
+            <partial name="~/Views/Shared/_LoginPartial.cshtml"/>
+        </div>
+        <div id="signup">
+            <partial name="~/Views/Shared/_RegisterPartial.cshtml" model="null"/>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+}

@@ -1,0 +1,215 @@
+@page "/priceeventslog"
+
+@using CTO.Price.Admin.Services
+@using CTO.Price.Shared.Domain
+@using CTO.Price.Shared.Enums
+@using CTO.Price.Shared.Extensions
+@using CTO.Price.Shared.Log;
+@using CTO.Price.Shared.Services
+@using Microsoft.Extensions.Options
+@using CTO.Price.Admin.Data
+
+@inject IPriceEventLogService priceEventLogService;
+@inject IOptions<PaginationSetting> paginationSetting;
+@inject TimeZoneService timeZoneService
+@inject SpinnerService spinnerService
+
+<AuthorizeView Policy="@RolePolicy.PriceEventsLog.ToString()">
+    <Authorized>
+        <div>
+            <div class="row">
+                <div class="col-2">
+                    <input id="fromDate" type="date" class="form-control" @bind="@fromDateLocal">
+                </div>
+                <div class="col-2">
+                    <input id="endDate" type="date" class="form-control" @bind="@endDateLocal">
+                </div>
+                <div class="col-2">
+                    <select class="form-control" @onchange="@ConvertEventEnum">
+                        @foreach (var option in eventOptions)
+                        {
+                            <option value="@option">@(option?.ToString() ?? "Event price")</option>
+                        }
+                    </select>
+                </div>
+                
+                <div class="col-1">
+                    <select class="form-control" @onchange="@ConvertLogLevelEnum">
+                        @foreach (var option in levelOptions)
+                        {
+                            <option value="@option">@(option?.ToString() ?? "Log level")</option>
+                        }
+                    </select>
+                </div>
+                
+                <div class="col-1">
+                    <input id="channel" type="text" placeholder="Channel" class="form-control" @bind="@channel">
+                </div>
+                <div class="col-1">
+                    <input id="store" type="text" placeholder="Store" class="form-control" @bind="@store">
+                </div>
+                <div class="col-1">
+                    <input id="sku" type="text" placeholder="Sku" class="form-control" @bind="@sku">
+                </div>
+                <div class="col-1">
+                    <button type="submit" class="btn btn-primary mb-2" @onclick=@(async () => await FilterLog())>Search</button>
+                </div>
+            </div>
+            <div>
+                <table class="table table-striped">
+                    <thead class="thead-dark">
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Identifier</th>
+                        <th>Level</th>
+                        <th>Event</th>
+                        <th>State</th>
+                        <th style="word-break: break-all">Data</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @if (pagedResult.RowCount > 0)
+                    {
+                        foreach (var price in priceDisplay)
+                        {
+                            <tr>
+                                <td>@price.Timestamp</td>
+                                <td>@price.Identifier</td>
+                                <td>@price.Level</td>
+                                <td>@price.Event</td>
+                                <td>@price.State</td>
+                                <td style="word-break: break-all">@price.Data</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>     
+                </table>
+            </div>
+
+            <Pager
+                PagedResult=@pagedResult
+                OnSelected="@(_ => HandlePageIndexSelected(pagedResult))">
+            </Pager>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    List<EventLog> priceDisplay = new List<EventLog>();
+
+    DateTime fromDateLocal;
+    DateTime endDateLocal;
+
+    string channel = string.Empty;
+    string store = string.Empty;
+    string sku = string.Empty;
+
+    List<EventEnum?> eventOptions = Enum.GetValues(typeof(EventEnum)).Cast<EventEnum?>().ToList();
+    EventEnum? eventEnum;
+
+    List<LogLevelEnum?> levelOptions = Enum.GetValues(typeof(LogLevelEnum)).Cast<LogLevelEnum?>().ToList();
+    LogLevelEnum? logLevelEnum;
+
+    #region Pagination
+
+    PagedResult<EventLog> pagedResult = new PagedResult<EventLog>();
+
+    async Task HandlePageIndexSelected(PagedResultBase pagedResultBase)
+    {
+        spinnerService.Show();
+        
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.AddHours(-offSet.Hours);
+        var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+        
+        pagedResult = (PagedResult<EventLog>) pagedResultBase;
+        priceDisplay = await priceEventLogService.GetPriceEventLogWithFilter(@from, end, eventEnum, logLevelEnum, channel, store, sku, pagedResultBase.CurrentPage, pagedResultBase.PageSize);
+
+        pagedResult.RowCount = Convert.ToInt32(await priceEventLogService.GetTotalRecordWithFilter(@from, end, eventEnum, logLevelEnum, channel, store, sku));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResultBase.PageSize);
+        pagedResult.CurrentPage = pagedResultBase.CurrentPage;
+
+        await ConvertLocalTimeStamp(priceDisplay);
+        StateHasChanged();
+        spinnerService.Hide();
+    }
+
+    #endregion
+
+    void ConvertEventEnum(ChangeEventArgs e)
+    {
+        EventEnum eventEnumConvert;
+        var isEventEnum = Enum.TryParse(e.Value.ToString(), true, out eventEnumConvert);
+        eventEnum = isEventEnum ? eventEnumConvert : (EventEnum?) null;
+    }
+    
+    void ConvertLogLevelEnum(ChangeEventArgs e)
+    {
+        LogLevelEnum logLevelEnumConvert;
+        var isLogLevelEnum = Enum.TryParse(e.Value.ToString(), true, out logLevelEnumConvert);
+        logLevelEnum = isLogLevelEnum ? logLevelEnumConvert : (LogLevelEnum?) null;
+    }
+
+    protected override void OnInitialized()
+    {
+        eventOptions.Insert(0, null);
+        levelOptions.Insert(0, null);
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {   
+        if (firstRender)
+        {
+            spinnerService.Show();
+            fromDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow)).Date;
+            endDateLocal = (await timeZoneService.GetLocalDateTime(DateTime.UtcNow.AddDays(1))).Date;
+
+            var offSet = await timeZoneService.GetLocalOffset();
+            var from = fromDateLocal.AddHours(-offSet.Hours);
+            var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+            
+            var pageSizeOption = PagingExtension.GetPaginationSettingBySemiColon(paginationSetting?.Value?.PageSize ?? string.Empty);
+            pagedResult.PageSize = Convert.ToInt32(pageSizeOption?.First());
+            pagedResult.CurrentPage = 1;
+
+            priceDisplay = await priceEventLogService.GetPriceEventLogWithFilter(from, end, eventEnum, logLevelEnum, channel, store, sku, 1, pagedResult.PageSize);
+        
+            pagedResult.RowCount = Convert.ToInt32(await priceEventLogService.GetTotalRecordWithFilter(from, end, eventEnum, logLevelEnum, channel, store, sku));
+            pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+
+            await ConvertLocalTimeStamp(priceDisplay);
+            
+            StateHasChanged();
+            spinnerService.Hide();    
+        }
+    }
+
+    async Task ConvertLocalTimeStamp(List<EventLog> input)
+    {
+        foreach (var eventLog in input)
+        {
+            eventLog.Timestamp = (await timeZoneService.GetLocalDateTime(eventLog.Timestamp)).DateTime;
+        }        
+    }
+
+    #region Filter
+
+    async Task FilterLog()
+    {   
+        spinnerService.Show();
+        
+        var offSet = await timeZoneService.GetLocalOffset();
+        var from = fromDateLocal.AddHours(-offSet.Hours);
+        var end = endDateLocal.AddDays(1).AddHours(-offSet.Hours);
+        
+        priceDisplay = await priceEventLogService.GetPriceEventLogWithFilter(@from, end, eventEnum, logLevelEnum, channel, store, sku, 1, pagedResult.PageSize);
+
+        pagedResult.RowCount = Convert.ToInt32(await priceEventLogService.GetTotalRecordWithFilter(@from, end, eventEnum, logLevelEnum, channel, store, sku));
+        pagedResult.PageCount = (int) Math.Ceiling(pagedResult.RowCount / (decimal) pagedResult.PageSize);
+        pagedResult.CurrentPage = 1;
+        await ConvertLocalTimeStamp(priceDisplay);
+        
+        spinnerService.Hide();
+    }
+    #endregion
+}
